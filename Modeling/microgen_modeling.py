@@ -1,4 +1,5 @@
 # This code builds TPMS STL models
+# Requires Microgen Python library
 
 import microgen
 import cadquery as cq
