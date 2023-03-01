@@ -3,7 +3,6 @@
 import numpy as np
 
 data = np.loadtxt("Computational Homogenization/CdataIWP_new.txt", dtype='i', delimiter=' ')
-# print(data)
 
 data = data.flatten()
 

@@ -1,5 +1,5 @@
 """ Code that combines interface surface labels in .mesh for IWP """
-
+# Disclaimer: This code was not used during the data generation phase, but should be more intuitive than replace_label.py #
 # combineSurfaceLabelsNew(filename)
 
 def getCoordinates(lst):
