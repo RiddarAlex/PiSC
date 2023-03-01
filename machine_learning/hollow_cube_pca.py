@@ -4,7 +4,7 @@ from matplotlib import cm
 from sklearn.model_selection import train_test_split
 
 # from iwp_data import c_list, iso_value_list, relative_density_list
-from hollowCube_data import c_list, thickness_list
+from hollow_cube_data import c_list, thickness_list
 
 import numpy as np
 import random

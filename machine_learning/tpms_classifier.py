@@ -5,8 +5,10 @@ from torch import nn
 from torch import optim
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
-from hollowCube_data import c_list, thickness_list
+from iwp_data import c_list as c_iwp
+from hollow_cube_data import c_list_100 as c_hc
 
 import numpy as np
 import random
@@ -28,7 +30,8 @@ class Lambda(nn.Module):
 #----------------------- FUNCTIONS -----------------------#
 def accuracy(out, yb):
     preds = torch.argmax(out, dim=1)
-    return (preds == yb).float().mean()
+    ground_truth = torch.argmax(yb, dim=1)
+    return (preds == ground_truth).float()#.mean()
 
 def loss_batch(model, loss_func, xb, yb, opt=None):
     loss = loss_func(model(xb), yb)
@@ -89,73 +92,18 @@ def main():
 
     #----------------------- DATA PREPROCESSING -----------------------#
     standardization = True
+    print(f"Hollow Cube datapoints: {len(c_hc)}")
+    print(f"IWP datapoints: {len(c_iwp)}")
+    c_list = c_hc + c_iwp
 
-    L_cube, l_cube = 0.020, 0.018
-    relative_density_list = (L_cube**3 - (l_cube - np.array(thickness_list))**3)/(L_cube**3)
-    # relative_density_list = (L_cube**3 - (l_cube - thickness_list)**3)/(L_cube**3)
+    y_hc = [[1, 0] for e in c_hc] #element 0: Hollow Cube
+    y_iwp = [[0, 1] for e in c_iwp] #element 1: IWP
+    class_ground_truth = y_hc + y_iwp
 
-#----------------------- Creating gaps -----------------------#
-
-    c_list_gap = []
-    relative_density_list_gap = []
-####### cube data 100 with gaps ##########
-
-    # for i in range(20):
-    #     c_list_gap.append(c_list[95-i])
-    #     relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[95-i])
-    #     c_list.pop(95-i)
-    #     relative_density_list = np.delete(relative_density_list, 95-i)
-
-    # for i in range(10):
-    #     c_list_gap.append(c_list[60-i])
-    #     relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[60-i])
-    #     c_list.pop(60-i)
-    #     relative_density_list = np.delete(relative_density_list, 60-i)
-
-    # for i in range(6):
-    #     c_list_gap.append(c_list[30-i])
-    #     relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[30-i])
-    #     c_list.pop(30-i)
-    #     relative_density_list = np.delete(relative_density_list, 30-i)
-
-    # for i in range(6):
-    #     c_list_gap.append(c_list[20-i])
-    #     relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[20-i])
-    #     c_list.pop(20-i)
-    #     relative_density_list = np.delete(relative_density_list, 20-i)
-
-######## cube data 499 with gaps ##########
-
-    for i in range(100):
-        c_list_gap.append(c_list[475-i])
-        relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[475-i])
-        c_list.pop(475-i)
-        relative_density_list = np.delete(relative_density_list, 475-i)
-
-    for i in range(50):
-        c_list_gap.append(c_list[300-i])
-        relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[300-i])
-        c_list.pop(300-i)
-        relative_density_list = np.delete(relative_density_list, 300-i)
-
-    for i in range(30):
-        c_list_gap.append(c_list[150-i])
-        relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[150-i])
-        c_list.pop(150-i)
-        relative_density_list = np.delete(relative_density_list, 150-i)
-
-    for i in range(30):
-        c_list_gap.append(c_list[100-i])
-        relative_density_list_gap = np.append(relative_density_list_gap, relative_density_list[100-i])
-        c_list.pop(100-i)
-        relative_density_list = np.delete(relative_density_list, 100-i)
 
     #----------------------- STANDARDIZE -----------------------#
     x_data = np.array([np.array(inputArray) for inputArray in c_list]) #array of arrays
-    y_data = np.asarray(relative_density_list)/100
-
-    x_data_gap = np.array([np.array(inputArray) for inputArray in c_list_gap]) #array of arrays
-    y_data_gap = np.asarray(relative_density_list_gap)/100
+    y_data = np.array([np.array(outputArray) for outputArray in class_ground_truth])
 
     if standardization:
         x_data = x_data.transpose()
@@ -168,37 +116,18 @@ def main():
         x_data[1] = ( x_data[1] - c12mean ) / c12std
         x_data[2] = ( x_data[2] - c44mean ) / c44std
         x_data = x_data.transpose()
-
-        y_mean, y_std = np.mean(y_data), np.std(y_data) 
-        y_data = ( y_data - y_mean ) / y_std
-
-        ### gap version ###
-        x_data_gap = x_data_gap.transpose()
-
-        c11mean_gap, c11std_gap = np.mean(x_data_gap[0]),  np.std(x_data_gap[0])
-        c12mean_gap, c12std_gap = np.mean(x_data_gap[1]),  np.std(x_data_gap[1]) 
-        c44mean_gap, c44std_gap = np.mean(x_data_gap[2]),  np.std(x_data_gap[2]) 
-        
-        x_data_gap[0] = ( x_data_gap[0] - c11mean_gap ) / c11std_gap
-        x_data_gap[1] = ( x_data_gap[1] - c12mean_gap ) / c12std_gap
-        x_data_gap[2] = ( x_data_gap[2] - c44mean_gap ) / c44std_gap
-        x_data_gap = x_data_gap.transpose()
-
-        y_mean_gap, y_std_gap = np.mean(y_data_gap), np.std(y_data_gap) 
-        y_data_gap = ( y_data_gap - y_mean_gap ) / y_std_gap
     else:
-        x_data /= 10**8
+        scale_factor = 10**8
+        x_data /= scale_factor
 
     x_data = torch.FloatTensor(x_data)
-    y_data = torch.FloatTensor(y_data).unsqueeze(1)
+    y_data = torch.FloatTensor(y_data)#.unsqueeze(1)
 
+    
     print(f"x_data.shape: {x_data.shape}")
     print(f"y_data.shape: {y_data.shape}")
 
-    x_data_gap = torch.FloatTensor(x_data_gap)
-    y_data_gap = torch.FloatTensor(y_data_gap).unsqueeze(1)
-
-    N = len(relative_density_list)
+    N = len(c_list)
     
     #----------------------- BUILD DATALOADER -----------------------#
     dataset = TensorDataset(x_data, y_data)
@@ -208,7 +137,8 @@ def main():
     train_dl, valid_dl, test_dl = DataLoader(train_ds, batch_size=bs), DataLoader(valid_ds, batch_size=bs), DataLoader(test_ds, batch_size=bs)
 
     #----------------------- FFNN DESIGN -----------------------#
-    loss_func = torch.nn.MSELoss()
+    #loss_func = torch.nn.MSELoss()
+    loss_func = F.cross_entropy
     hiddenLayerSize = 16
     model = nn.Sequential(
         Lambda(lambda xx: xx.view(xx.size(0), -1)),    
@@ -222,11 +152,11 @@ def main():
         nn.ReLU(),
         nn.Linear(hiddenLayerSize, hiddenLayerSize),
         nn.ReLU(),
-        nn.Linear(hiddenLayerSize, 1),
+        nn.Linear(hiddenLayerSize, 2),
     )
     
     #----------------------- TRAINING -----------------------#
-    epochs = 1000  # how many epochs to train for
+    epochs = 1000  #1000  # how many epochs to train for
 
     # opt = optim.SGD(model.parameters(), lr=0.01)
     opt = optim.Adam(model.parameters())
@@ -236,21 +166,51 @@ def main():
     test_dl = DataLoader(test_ds, batch_size=len(test_ds)) ### SET TO ONE SINGLE BATCH
     print(f"After {epoch} epochs: Testdata Loss = {evaluate(model, loss_func, test_dl)}")
 
-    gap_ds = TensorDataset(x_data_gap, y_data_gap)
-    gap_dl = DataLoader(gap_ds, batch_size=len(gap_ds))
     #----------------------- TEST DATA PREDICTIONS -----------------------#
     x1_test = []
     x2_test = []
     x3_test = []
     y_test  = []
     predictions = []
+    ground_truth = []
+    accuracies = []
     
+    for inputs, labels in test_dl:
+        preds = model(inputs)
+        predictions = preds
+        ground_truth = labels  
+        # predictions.append(preds)
+        # ground_truth.append(labels)
+
+    correct_predictions = accuracy(predictions, ground_truth)
+    predictions = [e.item() for e in torch.argmax(predictions, dim=1)]
+    ground_truth = [e.item() for e in torch.argmax(ground_truth, dim=1)]
+    print(f"len(ground_truth) = {len(ground_truth)}")
+    print(f"Predictions:{predictions} \nGround truth:{ground_truth}")  
+    accuracies.append(correct_predictions.mean())
     
+    print(f"accuracies = {accuracies}")
+    print(f"Accuracy after {epoch} epochs: {sum(accuracies)/len(accuracies)}")
+    
+    true_HC = len([1 for i in range(len(predictions)) if ( (predictions[i] == ground_truth[i]) and (predictions[i] == 1) )])
+    false_HC = len([1 for i in range(len(predictions)) if ( (predictions[i] != ground_truth[i]) and (predictions[i] == 1) )])
+
+    true_IWP = len([1 for i in range(len(predictions)) if ( (predictions[i] == ground_truth[i]) and (predictions[i] == 0) )])
+    false_IWP = len([1 for i in range(len(predictions)) if ( (predictions[i] != ground_truth[i]) and (predictions[i] == 0) )])
+
+    # correct_pred_HC = [1 if ( (predictions[i] == ground_truth[i]) and (predictions[i] == 1) ) else 0 for i in range(len(predictions))]
+    print(f"")
+    # expression for item in iterable if condition == True
+    print(f"true_HC = {true_HC}, false_HC = {false_HC}")
+    print(f"true_IWP = {true_IWP}, false_IWP = {false_IWP}")
+    print('breaknig')
+    """"
+
     for xb, yb in test_dl:
         y = yb.squeeze(1).numpy()
         for sublist in xb:
             x1_test.append(sublist[0])
-            x2_test.append(sublist[1])
+            x2_test.append(sublist[1])  
             x3_test.append(sublist[2])
         
         for element in yb:
@@ -259,26 +219,6 @@ def main():
         prediction = model(xb).detach().numpy()
         predictions.append(prediction)
 
-    ### gap version ###
-    x1_gap = []
-    x2_gap = []
-    x3_gap = []
-    y_gap  = []
-    gap_predictions = []
-
-    for xb, yb in gap_dl:
-        y = yb.squeeze(1).numpy()
-        for sublist in xb:
-            x1_gap.append(sublist[0])
-            x2_gap.append(sublist[1])
-            x3_gap.append(sublist[2])
-        
-        for element in yb:
-            y_gap.append(element)
-        
-        gap_prediction = model(xb).detach().numpy()
-        gap_predictions.append(gap_prediction)
-
     #----------------------- INVERSE TRANSFORM DATA -----------------------#
     y_test_predictions = np.asarray(predictions[0])
     y_test = np.asarray(y_test)
@@ -286,44 +226,23 @@ def main():
     x2 = np.asarray(x2_test)
     x3 = np.asarray(x3_test)
 
-    y_gap_predictions = np.asarray(gap_predictions[0])
-    y_gap = np.asarray(y_gap)
-    x1_gap = np.asarray(x1_gap)
-    x2_gap = np.asarray(x2_gap)
-    x3_gap = np.asarray(x3_gap)
-
     if standardization:
-        y_test_predictions = (y_test_predictions * y_std) + y_mean
-        y_test = (y_test * y_std) + y_mean
-
         x1 = x1 * c11std + c11mean
         x2 = x2 * c12std + c12mean
         x3 = x3 * c44std + c44mean
-
-        y_gap_predictions = (y_gap_predictions * y_std) + y_mean
-        y_gap = (y_gap * y_std) + y_mean
-
-        x1_gap = x1_gap * c11std + c11mean
-        x2_gap = x2_gap * c12std + c12mean
-        x3_gap = x3_gap * c44std + c44mean
     else:
-        x1 *= 10**8
-        x2 *= 10**8
-        x3 *= 10**8
+        x1 *= scale_factor
+        x2 *= scale_factor
+        x3 *= scale_factor
 
     #----------------------- ERROR IN COMPARABLE TERMS -----------------------#
-    predictedRD = np.asarray([e[0] for e in y_test_predictions])
-    groundTruthRD = np.asarray([e.item() for e in y_test])
+    predictedRD = np.asarray([[e[0], e[1]] for e in y_test_predictions])
+    groundTruthRD = np.asarray([[e[0]] for e in y_test])
     error = predictedRD-groundTruthRD
-    print(f"The mean squared error for predictions corresponding to test data is MSE = {np.mean(np.square(error))}")
-    print(f"The mean absolute error for predictions corresponding to test data is MAE = {np.mean(np.absolute(error))}")
-    
-    ### gap version ###
-    predictedRD_gap = np.asarray([e[0] for e in y_gap_predictions])
-    groundTruthRD_gap = np.asarray([e.item() for e in y_gap])
-    gap_error = predictedRD_gap-groundTruthRD_gap
-    print(f"The mean squared error for predictions corresponding to gap data is MSE = {np.mean(np.square(gap_error))}")
-    print(f"The mean absolute error for predictions corresponding to gap data is MAE = {np.mean(np.absolute(gap_error))}")
+    print(predictedRD)
+    print(groundTruthRD)
+    # print(f"The mean squared error for predictions corresponding to test data is MSE = {np.mean(np.square(error))}")
+    # print(f"The mean absolute error for predictions corresponding to test data is MAE = {np.mean(np.absolute(error))}")
 
     #----------------------- CHOOSE PLOTS -----------------------#
     c_element_plot = False
@@ -345,7 +264,7 @@ def main():
     #----------------------- PLOT C-ELEMENTS vs PREDICTIONS -----------------------#
     if c_vs_prediction_plot:
         c_fig = plt.figure(  )
-        # plt.title('C elements vs predicted RD')
+        plt.title('C-elements vs predicted RD', fontdict={'fontsize':14})
         plt.scatter(y_test_predictions, x1, label='C11 -> Prediction', marker='.', c="tomato")
         plt.scatter(y_test_predictions, x2, label='C12 -> Prediction', marker='.', c="steelblue")
         plt.scatter(y_test_predictions, x3, label='C44 -> Prediction', marker='.', c="seagreen")
@@ -358,8 +277,8 @@ def main():
 
     #----------------------- PLOT ERROR VS Relative Density -----------------------#
     if error_plot:
-        error_fig = plt.figure( figsize=plt.figaspect(2) )
-        plt.title('Error vs Relative Density')
+        error_fig = plt.figure( ) #figsize=plt.figaspect(2)
+        plt.title('Error vs Relative Density', fontdict={'fontsize':14})
         plt.scatter(predictedRD, error, label='Prediction Error', marker='.', c="tomato")
         poly = np.polyfit(predictedRD, predictedRD-groundTruthRD, 1)
         p = np.poly1d(poly)
@@ -387,7 +306,7 @@ def main():
         # sns.heatmap((corr_matrix), square=True, cmap="bone", vmin = 0.95, vmax = 1, annot=True)
     
     plt.show()
-
+"""
 
 if __name__ == '__main__':
 	main()

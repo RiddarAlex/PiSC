@@ -5,10 +5,8 @@ from torch import nn
 from torch import optim
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 
-from iwp_data import c_list as c_iwp
-from hollowCube_data import c_list_100 as c_hc
+from hollow_cube_data import c_list, thickness_list
 
 import numpy as np
 import random
@@ -30,8 +28,7 @@ class Lambda(nn.Module):
 #----------------------- FUNCTIONS -----------------------#
 def accuracy(out, yb):
     preds = torch.argmax(out, dim=1)
-    ground_truth = torch.argmax(yb, dim=1)
-    return (preds == ground_truth).float()#.mean()
+    return (preds == yb).float().mean()
 
 def loss_batch(model, loss_func, xb, yb, opt=None):
     loss = loss_func(model(xb), yb)
@@ -91,19 +88,14 @@ def main():
     torch.manual_seed(manualSeed)
 
     #----------------------- DATA PREPROCESSING -----------------------#
-    standardization = True
-    print(f"Hollow Cube datapoints: {len(c_hc)}")
-    print(f"IWP datapoints: {len(c_iwp)}")
-    c_list = c_hc + c_iwp
+    standardization = False#True
 
-    y_hc = [[1, 0] for e in c_hc] #element 0: Hollow Cube
-    y_iwp = [[0, 1] for e in c_iwp] #element 1: IWP
-    class_ground_truth = y_hc + y_iwp
-
+    L_cube, l_cube = 0.020, 0.018
+    relative_density_list = (L_cube**3 - (l_cube - np.array(thickness_list))**3)/(L_cube**3)
 
     #----------------------- STANDARDIZE -----------------------#
     x_data = np.array([np.array(inputArray) for inputArray in c_list]) #array of arrays
-    y_data = np.array([np.array(outputArray) for outputArray in class_ground_truth])
+    y_data = np.asarray(relative_density_list)/100
 
     if standardization:
         x_data = x_data.transpose()
@@ -116,18 +108,21 @@ def main():
         x_data[1] = ( x_data[1] - c12mean ) / c12std
         x_data[2] = ( x_data[2] - c44mean ) / c44std
         x_data = x_data.transpose()
+
+        y_mean, y_std = np.mean(y_data), np.std(y_data) 
+        y_data = ( y_data - y_mean ) / y_std
     else:
         scale_factor = 10**8
         x_data /= scale_factor
 
     x_data = torch.FloatTensor(x_data)
-    y_data = torch.FloatTensor(y_data)#.unsqueeze(1)
+    y_data = torch.FloatTensor(y_data).unsqueeze(1)
 
     
     print(f"x_data.shape: {x_data.shape}")
     print(f"y_data.shape: {y_data.shape}")
 
-    N = len(c_list)
+    N = len(relative_density_list)
     
     #----------------------- BUILD DATALOADER -----------------------#
     dataset = TensorDataset(x_data, y_data)
@@ -137,8 +132,7 @@ def main():
     train_dl, valid_dl, test_dl = DataLoader(train_ds, batch_size=bs), DataLoader(valid_ds, batch_size=bs), DataLoader(test_ds, batch_size=bs)
 
     #----------------------- FFNN DESIGN -----------------------#
-    #loss_func = torch.nn.MSELoss()
-    loss_func = F.cross_entropy
+    loss_func = torch.nn.MSELoss()
     hiddenLayerSize = 16
     model = nn.Sequential(
         Lambda(lambda xx: xx.view(xx.size(0), -1)),    
@@ -152,11 +146,11 @@ def main():
         nn.ReLU(),
         nn.Linear(hiddenLayerSize, hiddenLayerSize),
         nn.ReLU(),
-        nn.Linear(hiddenLayerSize, 2),
+        nn.Linear(hiddenLayerSize, 1),
     )
     
     #----------------------- TRAINING -----------------------#
-    epochs = 1000  #1000  # how many epochs to train for
+    epochs = 2000  #1000  # how many epochs to train for
 
     # opt = optim.SGD(model.parameters(), lr=0.01)
     opt = optim.Adam(model.parameters())
@@ -172,45 +166,13 @@ def main():
     x3_test = []
     y_test  = []
     predictions = []
-    ground_truth = []
-    accuracies = []
     
-    for inputs, labels in test_dl:
-        preds = model(inputs)
-        predictions = preds
-        ground_truth = labels  
-        # predictions.append(preds)
-        # ground_truth.append(labels)
-
-    correct_predictions = accuracy(predictions, ground_truth)
-    predictions = [e.item() for e in torch.argmax(predictions, dim=1)]
-    ground_truth = [e.item() for e in torch.argmax(ground_truth, dim=1)]
-    print(f"len(ground_truth) = {len(ground_truth)}")
-    print(f"Predictions:{predictions} \nGround truth:{ground_truth}")  
-    accuracies.append(correct_predictions.mean())
     
-    print(f"accuracies = {accuracies}")
-    print(f"Accuracy after {epoch} epochs: {sum(accuracies)/len(accuracies)}")
-    
-    true_HC = len([1 for i in range(len(predictions)) if ( (predictions[i] == ground_truth[i]) and (predictions[i] == 1) )])
-    false_HC = len([1 for i in range(len(predictions)) if ( (predictions[i] != ground_truth[i]) and (predictions[i] == 1) )])
-
-    true_IWP = len([1 for i in range(len(predictions)) if ( (predictions[i] == ground_truth[i]) and (predictions[i] == 0) )])
-    false_IWP = len([1 for i in range(len(predictions)) if ( (predictions[i] != ground_truth[i]) and (predictions[i] == 0) )])
-
-    # correct_pred_HC = [1 if ( (predictions[i] == ground_truth[i]) and (predictions[i] == 1) ) else 0 for i in range(len(predictions))]
-    print(f"")
-    # expression for item in iterable if condition == True
-    print(f"true_HC = {true_HC}, false_HC = {false_HC}")
-    print(f"true_IWP = {true_IWP}, false_IWP = {false_IWP}")
-    print('breaknig')
-    """"
-
     for xb, yb in test_dl:
         y = yb.squeeze(1).numpy()
         for sublist in xb:
             x1_test.append(sublist[0])
-            x2_test.append(sublist[1])  
+            x2_test.append(sublist[1])
             x3_test.append(sublist[2])
         
         for element in yb:
@@ -227,6 +189,9 @@ def main():
     x3 = np.asarray(x3_test)
 
     if standardization:
+        y_test_predictions = (y_test_predictions * y_std) + y_mean
+        y_test = (y_test * y_std) + y_mean
+
         x1 = x1 * c11std + c11mean
         x2 = x2 * c12std + c12mean
         x3 = x3 * c44std + c44mean
@@ -236,13 +201,11 @@ def main():
         x3 *= scale_factor
 
     #----------------------- ERROR IN COMPARABLE TERMS -----------------------#
-    predictedRD = np.asarray([[e[0], e[1]] for e in y_test_predictions])
-    groundTruthRD = np.asarray([[e[0]] for e in y_test])
+    predictedRD = np.asarray([e[0] for e in y_test_predictions])
+    groundTruthRD = np.asarray([e.item() for e in y_test])
     error = predictedRD-groundTruthRD
-    print(predictedRD)
-    print(groundTruthRD)
-    # print(f"The mean squared error for predictions corresponding to test data is MSE = {np.mean(np.square(error))}")
-    # print(f"The mean absolute error for predictions corresponding to test data is MAE = {np.mean(np.absolute(error))}")
+    print(f"The mean squared error for predictions corresponding to test data is MSE = {np.mean(np.square(error))}")
+    print(f"The mean absolute error for predictions corresponding to test data is MAE = {np.mean(np.absolute(error))}")
 
     #----------------------- CHOOSE PLOTS -----------------------#
     c_element_plot = False
@@ -306,7 +269,7 @@ def main():
         # sns.heatmap((corr_matrix), square=True, cmap="bone", vmin = 0.95, vmax = 1, annot=True)
     
     plt.show()
-"""
+
 
 if __name__ == '__main__':
 	main()
