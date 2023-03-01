@@ -1,4 +1,5 @@
 # This file replaces the labels of surfaces with other labels
+# This file was used during the data generation phase
 
 import numpy as np
 # e.g. replaceLabel(7, 4, 'IWP60d30')
