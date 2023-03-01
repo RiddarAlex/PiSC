@@ -6,7 +6,7 @@ from torch import optim
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 
-from hollowCube_data import c_list, thickness_list
+from hollow_cube_data import c_list, thickness_list
 
 import numpy as np
 import random
