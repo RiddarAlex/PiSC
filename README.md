@@ -30,3 +30,4 @@ This codebase implements the system described in the project #3 report:
 
  ## Prerequisites
  This codebase was developed and tested with PyTorch 1.13.0 and NumPy 1.22.3.
+ The modeling and meshing was developed with Microgen 1.0.1 and Gmsh 4.11.0.
